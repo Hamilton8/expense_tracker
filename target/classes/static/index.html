@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expense Tracker</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--acc:#059669}
+@media(prefers-color-scheme:dark){:root{--bg:#15171a;--fg:#eee;--mut:#9aa;--line:#333;--acc:#34d399}}
+body{font:16px system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:900px;margin:2rem auto;padding:0 1rem}
+form{display:flex;gap:.5rem;flex-wrap:wrap}input,select{padding:.55rem;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit}
+button{padding:.55rem 1rem;border:0;border-radius:6px;background:var(--acc);color:#04130c;cursor:pointer}
+table{width:100%;border-collapse:collapse;margin-top:1rem}th,td{text-align:left;padding:.45rem;border-bottom:1px solid var(--line)}
+.mut{color:var(--mut)}.bar{background:var(--acc);height:14px;border-radius:3px}.row{display:grid;grid-template-columns:120px 1fr 110px;gap:.5rem;align-items:center;margin:.3rem 0}
+#msg{color:#dc2626}.x{background:none;color:var(--mut);padding:0 .4rem}
+</style></head><body>
+<h1>Expense Tracker</h1>
+<form id="f">
+  <input id="amt" type="number" step="0.01" min="0.01" placeholder="Amount" required style="width:110px">
+  <input id="desc" placeholder="Description" style="flex:1;min-width:160px">
+  <input id="date" type="date">
+  <select id="cat"></select><button>Add</button>
+</form>
+<p id="msg"></p>
+<h2>This month</h2><div id="sum"></div>
+<h2>Expenses</h2>
+<table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th></th></tr></thead><tbody id="t"></tbody></table>
+<script>
+const $=id=>document.getElementById(id), api=(u,o)=>fetch('/api'+u,o);
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){
+  if(!$('cat').options.length){(await (await api('/categories')).json()).forEach(c=>$('cat').add(new Option(c.name,c.id)))}
+  const ex=await (await api('/expenses')).json();
+  $('t').innerHTML=ex.map(e=>`<tr><td>${e.date}</td><td>${esc(e.description)}</td><td class="mut">${esc(e.category)}</td><td>${e.amount.toFixed(2)}</td><td><button class="x" data-id="${e.id}" title="Delete">✕</button></td></tr>`).join('');
+  const s=await (await api('/reports/summary')).json();
+  $('sum').innerHTML=`<p><b>Total: ${s.total.toFixed(2)}</b></p>`+(s.byCategory.map(c=>`<div class="row"><span>${esc(c.category)}</span><div class="bar" style="width:${c.percent}%"></div><span>${c.total.toFixed(2)} (${c.percent}%)</span></div>`).join('')||'<p class="mut">No expenses this month.</p>');
+}
+$('f').onsubmit=async e=>{e.preventDefault();$('msg').textContent='';
+  const r=await api('/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:+$('amt').value,description:$('desc').value,date:$('date').value||null,categoryId:+$('cat').value})});
+  if(!r.ok){$('msg').textContent=(await r.json()).message||'Error';return}
+  $('amt').value='';$('desc').value='';load()};
+$('t').onclick=async e=>{const id=e.target.dataset.id;if(id){await api('/expenses/'+id,{method:'DELETE'});load()}};
+load();
+</script></body></html>
